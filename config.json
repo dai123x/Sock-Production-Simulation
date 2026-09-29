@@ -1,6 +1,5 @@
 {
     "tasks": {
-        "Weaving": 0.14,
         "Seaming": 1.18,
         "Sorting": 1.11,
         "Shaping": 1.14,
@@ -8,7 +7,6 @@
         "Packaging": 1.25
     },
     "precedence": [
-        ["Weaving", "Seaming"],
         ["Seaming", "Sorting"],
         ["Sorting", "Shaping"],
         ["Shaping", "Tagging"],

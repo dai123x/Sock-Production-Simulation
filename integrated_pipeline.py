@@ -2,9 +2,6 @@ import json
 import pulp
 import simpy
 import numpy as np
-import warnings
-
-warnings.filterwarnings('ignore')
 
 class IntegratedOptimizationPipeline:
     """
@@ -16,6 +13,7 @@ class IntegratedOptimizationPipeline:
             self.config = json.load(f)
         self.optimal_stations = {}
         self.simulation_results = []
+        self.num_stations = 0
 
     def run_albp_milp(self):
         """阶段1：混合整数线性规划求解"""
@@ -46,13 +44,19 @@ class IntegratedOptimizationPipeline:
         
         if pulp.LpStatus[prob.status] == 'Optimal':
             self.num_stations = int(pulp.value(prob.objective))
+            total_task_time = sum(proc_times.values())
+            
             for j in range(1, max_stations + 1):
                 if pulp.value(y[j]) == 1.0:
                     self.optimal_stations[f"Station_{j}"] = [i for i in tasks if pulp.value(x[i, j]) == 1.0]
             print(f"✅ 寻优成功！理论最小工站数: {self.num_stations}")
+            
             for st, tks in self.optimal_stations.items():
                 load = sum(proc_times[t] for t in tks)
                 print(f"   {st}: 包含任务 {tks}, 负荷 {load:.2f}s (平衡损失率: {(cycle_time-load)/cycle_time*100:.1f}%)")
+            
+            lbr = (total_task_time / (self.num_stations * cycle_time)) * 100
+            print(f"   --> 系统整体线平衡率 (LBR): {lbr:.2f}%")
         else:
             raise ValueError("MILP 无法在给定节拍下找到可行解！")
 
@@ -65,7 +69,6 @@ class IntegratedOptimizationPipeline:
             return max(mu * 0.5, np.random.normal(mu, mu * cv))
 
         def sim_process(env, stations, results_dict):
-            # 动态生成资源池
             resources = {st: simpy.Resource(env, capacity=1) for st in stations}
             wip = 0
             
@@ -86,7 +89,6 @@ class IntegratedOptimizationPipeline:
                     yield env.timeout(get_time(ia_time))
                     env.process(process_item())
             
-            # 每分钟记录WIP
             def monitor():
                 while True:
                     results_dict['wip_log'].append(wip)
@@ -130,7 +132,6 @@ class IntegratedOptimizationPipeline:
         print(f"班次预期毛利 (Revenue)\t| ¥ {revenue:.2f}")
         print(f"班次净效益 (Net Profit)\t| ¥ {net_profit:.2f}")
         print("=" * 50)
-
 
 if __name__ == "__main__":
     pipeline = IntegratedOptimizationPipeline("config.json")
