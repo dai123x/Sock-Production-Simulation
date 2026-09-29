@@ -1,0 +1,28 @@
+{
+    "tasks": {
+        "Weaving": 0.14,
+        "Seaming": 1.18,
+        "Sorting": 1.11,
+        "Shaping": 1.14,
+        "Tagging": 1.03,
+        "Packaging": 1.25
+    },
+    "precedence": [
+        ["Weaving", "Seaming"],
+        ["Seaming", "Sorting"],
+        ["Sorting", "Shaping"],
+        ["Shaping", "Tagging"],
+        ["Tagging", "Packaging"]
+    ],
+    "target_takt_time": 1.25,
+    "simulation": {
+        "shift_time_seconds": 28800,
+        "replications": 10,
+        "stochastic_cv": 0.05
+    },
+    "financials": {
+        "labor_cost_per_station_per_shift": 200,
+        "wip_holding_cost_per_unit": 0.5,
+        "revenue_per_unit": 2.5
+    }
+}
