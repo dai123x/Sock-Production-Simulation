@@ -1,12 +1,29 @@
+import os
+
 import pulp
+
+
+def _cbc_solver(msg=0):
+    solver = pulp.PULP_CBC_CMD(msg=msg)
+    temp_dir = solver.tmpDir
+    if temp_dir and not temp_dir.isascii():
+        windows_dir = os.environ.get("WINDIR", r"C:\Windows")
+        ascii_temp_dir = os.path.join(windows_dir, "Temp")
+        if not os.path.isdir(ascii_temp_dir) or not os.access(ascii_temp_dir, os.W_OK):
+            raise RuntimeError(
+                "CBC cannot use the non-ASCII default temp path, and the ASCII "
+                f"fallback directory is not writable: {ascii_temp_dir}"
+            )
+        solver.tmpDir = ascii_temp_dir
+    return solver
+
 
 def solve_albp(tasks, processing_times, precedence_relations, cycle_time):
     """
     硕士学位论文核心算法：第一类装配线平衡问题 (ALBP-1) 的混合整数线性规划 (MILP) 模型
-    目标：在给定节拍时间 (Cycle Time) 下，最小化工站数量 (Minimize number of workstations)。
+    目标：在给定工位周期时间 (Cycle Time) 下，最小化工站数量 (Minimize number of workstations)。
     """
     num_tasks = len(tasks)
-    min_stations = int(sum(processing_times.values()) // cycle_time) + 1
     max_stations = num_tasks 
 
     prob = pulp.LpProblem("Assembly_Line_Balancing_Problem", pulp.LpMinimize)
@@ -35,7 +52,7 @@ def solve_albp(tasks, processing_times, precedence_relations, cycle_time):
         prob += y[j+1] <= y[j]
 
     print("正在调用 CBC 求解器求解 ALBP MILP 模型...")
-    prob.solve(pulp.PULP_CBC_CMD(msg=0))
+    prob.solve(_cbc_solver(msg=0))
 
     if pulp.LpStatus[prob.status] == 'Optimal':
         optimal_stations = int(pulp.value(prob.objective))
@@ -66,6 +83,6 @@ if __name__ == "__main__":
         ('缝头', '整理'), ('整理', '定型'), 
         ('定型', '打签'), ('打签', '包装')
     ]
-    takt_time = 1.25 
-    
-    solve_albp(tasks, processing_times, precedence, takt_time)
+    cycle_time = 1.25
+
+    solve_albp(tasks, processing_times, precedence, cycle_time)

@@ -12,7 +12,7 @@
         ["Shaping", "Tagging"],
         ["Tagging", "Packaging"]
     ],
-    "target_takt_time": 1.25,
+    "target_cycle_time": 1.25,
     "simulation": {
         "shift_time_seconds": 28800,
         "replications": 10,

@@ -1,5 +1,4 @@
 import simpy
-import random
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -12,9 +11,9 @@ warnings.filterwarnings('ignore')
 
 def get_proc_time(mu, cv):
     """
-    博士级特性1：随机过程建模 (Stochastic Modeling)
-    使用截断正态分布模拟人工作业和机器运转的随机波动。
-    真实世界的加工时间不是恒定的，而是围绕均值波动的。
+    随机过程建模 (Stochastic Modeling)
+    对正态随机抽样做下限裁切以避免过短的加工时间；这并非严格的截断正态抽样。
+    该简化模型用于情景分析，不等同于真实工厂的校准分布。
     mu: 均值
     cv: 变异系数 (Coefficient of Variation) = 标准差 / 均值
     """
@@ -22,7 +21,8 @@ def get_proc_time(mu, cv):
         return mu
     sigma = mu * cv
     val = np.random.normal(mu, sigma)
-    # 截断处理，保证加工时间符合物理现实（不能为负，且有极限压缩时间）
+    # 对抽样结果做下限裁切（clipping），不是重抽样意义上的截断正态分布。
+    # 因此配置 CV 是输入波动参数，不等于裁切后的实际样本 CV。
     return max(val, mu * 0.5)
 
 class PhDHosieryLine:
@@ -81,7 +81,7 @@ class PhDHosieryLine:
         self.throughput += 1
 
 def sock_arrival(env, line, config):
-    """到达过程建模：服从泊松到达（指数分布时间间隔）及随机波动"""
+    """到达间隔采用带下限裁切的正态抽样；这不是泊松到达过程。"""
     while True:
         yield env.timeout(get_proc_time(config['t_ia'], config['cv_ia']))
         env.process(line.process_sock())
@@ -99,29 +99,40 @@ def run_replication(config, sim_time=28800):
     
     return line.throughput, avg_wip
 
-def monte_carlo_experiment(config_before, config_after, replications=30, sim_time=28800):
+def monte_carlo_experiment(config_before, config_after, replications=30, sim_time=28800, seed=20261001):
     """
-    博士级特性2：蒙特卡洛仿真实验 (Monte Carlo Simulation)
-    通过多次独立重复实验 (Replications)，获取样本分布，为统计推断提供支撑。
+    通过多个独立场景运行获取样本分布。固定随机种子以便重现；相同的
+    Replication 序号仅用于追踪运行次序，不表示前后场景使用配对随机数。
     """
+    np.random.seed(seed)
     results = []
-    
-    print(f"正在执行蒙特卡洛仿真... (共 {replications} 次独立试验)")
+
+    print(f"正在执行蒙特卡洛仿真... (独立重复次数={replications}, seed={seed})")
     for i in range(replications):
         th_b, wip_b = run_replication(config_before, sim_time)
-        results.append({'Scenario': 'Before (孤岛式)', 'Throughput': th_b, 'WIP': wip_b})
-        
+        results.append({
+            'Replication': i + 1,
+            'Scenario': 'Before (孤岛式)',
+            'Throughput': th_b,
+            'WIP': wip_b,
+        })
+
         th_a, wip_a = run_replication(config_after, sim_time)
-        results.append({'Scenario': 'After (精益化)', 'Throughput': th_a, 'WIP': wip_a})
-        
-        if (i+1) % 10 == 0:
-            print(f"已完成 {i+1}/{replications} 次试验")
-            
+        results.append({
+            'Replication': i + 1,
+            'Scenario': 'After (精益化)',
+            'Throughput': th_a,
+            'WIP': wip_a,
+        })
+
+        if (i + 1) % 10 == 0:
+            print(f"已完成 {i + 1}/{replications} 次试验")
+
     return pd.DataFrame(results)
 
 def generate_academic_dashboard(df, t_stat_th, p_val_th):
     """
-    博士级特性3：学术级数据可视化 (Publication-Ready Visualizations)
+    情景仿真的结果可视化 (Scenario Simulation Visualization)
     使用核密度估计(KDE)和箱线图展示分布特性及置信区间。
     """
     plt.rcParams['font.sans-serif'] = ['SimHei'] 
@@ -129,17 +140,17 @@ def generate_academic_dashboard(df, t_stat_th, p_val_th):
     
     sns.set_theme(style="whitegrid", font="SimHei")
     fig = plt.figure(figsize=(16, 8))
-    fig.suptitle('传统袜业生产线精益化改造的系统动力学仿真与统计推断', fontsize=18, fontweight='bold', y=0.98)
+    fig.suptitle('袜业生产线情景仿真与统计摘要（DES）', fontsize=18, fontweight='bold', y=0.98)
 
     # 1. 产能分布的核密度估计图 (KDE Plot)
     ax1 = plt.subplot(1, 2, 1)
     sns.kdeplot(data=df, x="Throughput", hue="Scenario", fill=True, common_norm=False, palette="Set1", alpha=0.5, ax=ax1)
-    ax1.set_title('日产能概率密度分布 (KDE Distribution)', fontsize=14)
-    ax1.set_xlabel('日产能 (双/天)', fontsize=12)
+    ax1.set_title('8小时班次完成产量分布 (KDE)', fontsize=14)
+    ax1.set_xlabel('班次完成产量 (双/8小时)', fontsize=12)
     ax1.set_ylabel('概率密度', fontsize=12)
     
     # 标注显著性检验结果
-    significance_text = f"独立样本 T 检验:\n$t-statistic = {t_stat_th:.2f}$\n$p-value = {p_val_th:.2e}$\n结论: 改善极其显著 (p < 0.01)"
+    significance_text = f"Welch 独立样本 t 检验（模拟）:\n$t = {t_stat_th:.2f}$\n$p = {p_val_th:.2e}$\n参数化情景输出；非现场因果证据"
     ax1.text(0.05, 0.95, significance_text, transform=ax1.transAxes, fontsize=11, 
              verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
 
@@ -153,13 +164,15 @@ def generate_academic_dashboard(df, t_stat_th, p_val_th):
 
     plt.tight_layout()
     plt.subplots_adjust(top=0.90)
-    chart_path = os.path.join(os.getcwd(), 'phd_analysis_dashboard.png')
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    chart_path = os.path.join(project_dir, 'phd_analysis_dashboard.png')
     plt.savefig(chart_path, dpi=300, bbox_inches='tight')
     print(f"\n[成功] 学术级仿真数据大屏已保存至: {chart_path}")
 
 if __name__ == "__main__":
     SIM_TIME = 28800  # 8小时
-    REPLICATIONS = 30 # 大样本定律(N>=30)
+    REPLICATIONS = 30
+    RANDOM_SEED = 20261001
 
     # 孤岛式生产：极高的人工不稳定性 (CV较大)
     config_before = {
@@ -168,22 +181,27 @@ if __name__ == "__main__":
         'cv': 0.25 # 人工作业波动率 25%
     }
 
-    # 流水线生产：引入自动化与标准作业 (CV极小)
+    # 参数化优化情景：设定更短的工序时间与较低的输入 CV；未模拟自动化改造过程
     config_after = {
         't_ia': 1.33, 'cv_ia': 0.05, # 物料平滑到达
         't_seaming': 1.18, 't_sorting': 1.11, 't_shaping': 1.14, 't_tagging': 1.03, 't_packaging': 1.25,
         'cv': 0.05 # 标准化及机器作业波动率仅 5%
     }
 
-    # 运行蒙特卡洛仿真
-    df_results = monte_carlo_experiment(config_before, config_after, replications=REPLICATIONS, sim_time=SIM_TIME)
+    # 运行蒙特卡洛仿真并保存每次运行的原始输出，便于复核报告统计量。
+    df_results = monte_carlo_experiment(
+        config_before,
+        config_after,
+        replications=REPLICATIONS,
+        sim_time=SIM_TIME,
+        seed=RANDOM_SEED,
+    )
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    csv_path = os.path.join(project_dir, 'phd_simulation_replications.csv')
+    df_results.to_csv(csv_path, index=False, encoding='utf-8-sig')
+    print(f"仿真逐次结果已保存至: {csv_path}")
 
-    # 博士级特性4：统计假设检验 (Statistical Hypothesis Testing)
-    # 使用独立样本 t-test 验证产能提升的统计学显著性
-    th_before = df_results[df_results['Scenario'] == 'Before (孤岛式)']['Throughput']
-    th_after = df_results[df_results['Scenario'] == 'After (精没化)']['Throughput']  # Need to handle exact strings
-    
-    # Extract robustly using string matching
+    # Welch 独立样本 t 检验：两个场景未使用配对随机数。
     th_before = df_results[df_results['Scenario'].str.contains('Before')]['Throughput']
     th_after = df_results[df_results['Scenario'].str.contains('After')]['Throughput']
     
@@ -200,6 +218,6 @@ if __name__ == "__main__":
     print(f"t-statistic: {t_stat_th:.4f}")
     print(f"p-value:     {p_val_th:.2e}")
     if p_val_th < 0.01:
-        print("结论: 改造后的产能提升在统计学上极其显著 (Reject Null Hypothesis)。")
+        print("结论: 在当前参数化情景与抽样假设下，模拟产量均值存在差异；此结果不代表工厂实测效果或因果证据。")
     
     generate_academic_dashboard(df_results, t_stat_th, p_val_th)

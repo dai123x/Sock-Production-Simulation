@@ -83,8 +83,8 @@ def generate_charts(line_before, line_after, lbr_before, lbr_after):
 
     # 图表 1: 产能对比
     bars1 = ax1.bar(labels, throughputs, color=['#e74c3c', '#2ecc71'])
-    ax1.set_title('日产能对比 (双/天)', fontsize=14)
-    ax1.set_ylabel('产出数量', fontsize=12)
+    ax1.set_title('8小时班次产出对比 (双/班)', fontsize=14)
+    ax1.set_ylabel('班次完成产量 (双)', fontsize=12)
     for bar in bars1:
         yval = bar.get_height()
         ax1.text(bar.get_x() + bar.get_width()/2.0, yval + 500, int(yval), ha='center', va='bottom', fontweight='bold', fontsize=12)
@@ -99,7 +99,8 @@ def generate_charts(line_before, line_after, lbr_before, lbr_after):
         ax2.text(bar.get_x() + bar.get_width()/2.0, yval + 2, f"{yval:.1f}%", ha='center', va='bottom', fontweight='bold', fontsize=12)
 
     plt.tight_layout()
-    chart_path = os.path.join(os.getcwd(), 'simulation_comparison.png')
+    project_dir = os.path.dirname(os.path.abspath(__file__))
+    chart_path = os.path.join(project_dir, 'simulation_comparison.png')
     plt.savefig(chart_path, dpi=300)
     print(f"\n[成功] 效能对比图表已保存至: {chart_path}")
 
@@ -110,7 +111,7 @@ if __name__ == "__main__":
 
     # ================= 改善前配置 (孤岛式生产) =================
     config_before = {
-        'inter_arrival_time': 6.0,  # 约10件/分钟 (节拍6秒)
+        'inter_arrival_time': 6.0,  # 平均到达间隔参数 6 秒（指数分布抽样）
         'time_seaming': 6.0,        # 瓶颈工序耗时 6秒
         'time_sorting': 4.0,
         'time_shaping': 2.0,
@@ -123,11 +124,11 @@ if __name__ == "__main__":
     # ================= 改善后配置 (精益流水线) =================
     config_after = {
         'inter_arrival_time': 1.33, # 约45件/分钟 (系统均衡流转)
-        'time_seaming': 1.18,       # 自动化设备极大缩减缝头时间
+        'time_seaming': 1.18,       # 参数化情景输入；未模拟设备改造机制
         'time_sorting': 1.11,
         'time_shaping': 1.14,
         'time_tagging': 1.03,
-        'time_packaging': 1.25,     # 新的瓶颈节拍 1.25秒
+        'time_packaging': 1.25,     # 瓶颈工序时间参数 1.25 秒
         'seaming_machines': 1, 'sorting_machines': 1, 'shaping_machines': 1,
         'tagging_machines': 1, 'packaging_machines': 1,
     }
@@ -154,7 +155,7 @@ if __name__ == "__main__":
     print("\n【仿真效能对比报告】")
     print(f"{'指标 (Metrics)':<25} | {'改善前 (孤岛式)':<15} | {'改善后 (流水线)':<15}")
     print("-" * 65)
-    print(f"{'产出量 / Throughput (双)':<25} | {line_before.throughput:<15} | {line_after.throughput:<15}")
+    print(f"{'8小时班次产出 / Throughput (双)':<25} | {line_before.throughput:<15} | {line_after.throughput:<15}")
     print(f"{'在制品库存 / WIP (双)':<25} | {line_before.wip:<15} | {line_after.wip:<15}")
     print(f"{'线平衡率 / LBR (%)':<25} | {lbr_before*100:.1f}%{'':<11} | {lbr_after*100:.1f}%")
     print("-" * 65)
