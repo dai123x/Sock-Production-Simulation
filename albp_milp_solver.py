@@ -4,8 +4,13 @@ import pulp
 
 
 def _cbc_solver(msg=0):
-    solver = pulp.PULP_CBC_CMD(msg=msg)
-    temp_dir = solver.tmpDir
+    if hasattr(pulp, "PULP_CBC_CMD"):
+        solver = pulp.PULP_CBC_CMD(msg=msg)
+    elif hasattr(pulp, "COIN_CMD"):
+        solver = pulp.COIN_CMD(msg=msg)
+    else:
+        solver = pulp.LpSolverDefault
+    temp_dir = getattr(solver, "tmpDir", None)
     if temp_dir and not temp_dir.isascii():
         windows_dir = os.environ.get("WINDIR", r"C:\Windows")
         ascii_temp_dir = os.path.join(windows_dir, "Temp")
@@ -18,6 +23,17 @@ def _cbc_solver(msg=0):
     return solver
 
 
+def _make_var_dict(prob, name, indices, cat='Binary'):
+    if hasattr(prob, 'add_variable_dict'):
+        return prob.add_variable_dict(name, indices, cat=cat)
+    if hasattr(pulp.LpVariable, 'dicts'):
+        if isinstance(indices, tuple):
+            import itertools
+            return pulp.LpVariable.dicts(name, itertools.product(*indices), cat=cat)
+        return pulp.LpVariable.dicts(name, indices, cat=cat)
+    raise RuntimeError("Unsupported PuLP version for variable dictionary creation.")
+
+
 def solve_albp(tasks, processing_times, precedence_relations, cycle_time):
     """
     硕士学位论文核心算法：第一类装配线平衡问题 (ALBP-1) 的混合整数线性规划 (MILP) 模型
@@ -28,13 +44,8 @@ def solve_albp(tasks, processing_times, precedence_relations, cycle_time):
 
     prob = pulp.LpProblem("Assembly_Line_Balancing_Problem", pulp.LpMinimize)
 
-    x = pulp.LpVariable.dicts("x", 
-                              ((i, j) for i in tasks for j in range(1, max_stations + 1)),
-                              cat='Binary')
-    
-    y = pulp.LpVariable.dicts("y", 
-                              (j for j in range(1, max_stations + 1)),
-                              cat='Binary')
+    x = _make_var_dict(prob, "x", (tasks, range(1, max_stations + 1)), cat='Binary')
+    y = _make_var_dict(prob, "y", range(1, max_stations + 1), cat='Binary')
 
     prob += pulp.lpSum([y[j] for j in range(1, max_stations + 1)])
 
