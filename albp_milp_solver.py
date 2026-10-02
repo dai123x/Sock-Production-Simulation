@@ -23,12 +23,13 @@ def _cbc_solver(msg=0):
     return solver
 
 
-def _make_var_dict(prob, name, indices, cat='Binary'):
-    if hasattr(prob, 'add_variable_dict'):
+def _make_var_dict(prob, name, indices, cat="Binary"):
+    if hasattr(prob, "add_variable_dict"):
         return prob.add_variable_dict(name, indices, cat=cat)
-    if hasattr(pulp.LpVariable, 'dicts'):
+    if hasattr(pulp.LpVariable, "dicts"):
         if isinstance(indices, tuple):
             import itertools
+
             return pulp.LpVariable.dicts(name, itertools.product(*indices), cat=cat)
         return pulp.LpVariable.dicts(name, indices, cat=cat)
     raise RuntimeError("Unsupported PuLP version for variable dictionary creation.")
@@ -40,12 +41,12 @@ def solve_albp(tasks, processing_times, precedence_relations, cycle_time):
     目标：在给定工位周期时间 (Cycle Time) 下，最小化工站数量 (Minimize number of workstations)。
     """
     num_tasks = len(tasks)
-    max_stations = num_tasks 
+    max_stations = num_tasks
 
     prob = pulp.LpProblem("Assembly_Line_Balancing_Problem", pulp.LpMinimize)
 
-    x = _make_var_dict(prob, "x", (tasks, range(1, max_stations + 1)), cat='Binary')
-    y = _make_var_dict(prob, "y", range(1, max_stations + 1), cat='Binary')
+    x = _make_var_dict(prob, "x", (tasks, range(1, max_stations + 1)), cat="Binary")
+    y = _make_var_dict(prob, "y", range(1, max_stations + 1), cat="Binary")
 
     prob += pulp.lpSum([y[j] for j in range(1, max_stations + 1)])
 
@@ -53,19 +54,23 @@ def solve_albp(tasks, processing_times, precedence_relations, cycle_time):
         prob += pulp.lpSum([x[i, j] for j in range(1, max_stations + 1)]) == 1
 
     for j in range(1, max_stations + 1):
-        prob += pulp.lpSum([processing_times[i] * x[i, j] for i in tasks]) <= cycle_time * y[j]
+        prob += (
+            pulp.lpSum([processing_times[i] * x[i, j] for i in tasks])
+            <= cycle_time * y[j]
+        )
 
-    for (u, v) in precedence_relations:
-        prob += pulp.lpSum([j * x[u, j] for j in range(1, max_stations + 1)]) <= \
-                pulp.lpSum([j * x[v, j] for j in range(1, max_stations + 1)])
+    for u, v in precedence_relations:
+        prob += pulp.lpSum(
+            [j * x[u, j] for j in range(1, max_stations + 1)]
+        ) <= pulp.lpSum([j * x[v, j] for j in range(1, max_stations + 1)])
 
     for j in range(1, max_stations):
-        prob += y[j+1] <= y[j]
+        prob += y[j + 1] <= y[j]
 
     print("正在调用 CBC 求解器求解 ALBP MILP 模型...")
     prob.solve(_cbc_solver(msg=0))
 
-    if pulp.LpStatus[prob.status] == 'Optimal':
+    if pulp.LpStatus[prob.status] == "Optimal":
         optimal_stations = int(pulp.value(prob.objective))
         print(f"【最优解找到】最小所需工站数: {optimal_stations}")
         station_assignments = {}
@@ -76,23 +81,31 @@ def solve_albp(tasks, processing_times, precedence_relations, cycle_time):
                 station_assignments[j] = assigned_tasks
                 load = sum(processing_times[t] for t in assigned_tasks)
                 total_load += load
-                print(f"工站 {j} 分配任务: {assigned_tasks} | 负荷: {load:.2f}s | 闲置时间: {cycle_time - load:.2f}s")
-        
+                print(
+                    f"工站 {j} 分配任务: {assigned_tasks} | 负荷: {load:.2f}s | 闲置时间: {cycle_time - load:.2f}s"
+                )
+
         lbr = total_load / (optimal_stations * cycle_time) * 100
         print(f"\n系统整体线平衡率 (LBR): {lbr:.2f}%")
     else:
         print("未找到最优解。")
 
+
 if __name__ == "__main__":
     # 袜业主生产线数据抽象 (织造独立成列，不参与流水线平衡)
-    tasks = ['缝头', '整理', '定型', '打签', '包装']
+    tasks = ["缝头", "整理", "定型", "打签", "包装"]
     processing_times = {
-        '缝头': 1.18, '整理': 1.11, 
-        '定型': 1.14, '打签': 1.03, '包装': 1.25
+        "缝头": 1.18,
+        "整理": 1.11,
+        "定型": 1.14,
+        "打签": 1.03,
+        "包装": 1.25,
     }
     precedence = [
-        ('缝头', '整理'), ('整理', '定型'), 
-        ('定型', '打签'), ('打签', '包装')
+        ("缝头", "整理"),
+        ("整理", "定型"),
+        ("定型", "打签"),
+        ("打签", "包装"),
     ]
     cycle_time = 1.25
 

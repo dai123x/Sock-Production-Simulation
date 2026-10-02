@@ -26,12 +26,13 @@ def _cbc_solver(msg=0):
     return solver
 
 
-def _make_var_dict(prob, name, indices, cat='Binary'):
-    if hasattr(prob, 'add_variable_dict'):
+def _make_var_dict(prob, name, indices, cat="Binary"):
+    if hasattr(prob, "add_variable_dict"):
         return prob.add_variable_dict(name, indices, cat=cat)
-    if hasattr(pulp.LpVariable, 'dicts'):
+    if hasattr(pulp.LpVariable, "dicts"):
         if isinstance(indices, tuple):
             import itertools
+
             return pulp.LpVariable.dicts(name, itertools.product(*indices), cat=cat)
         return pulp.LpVariable.dicts(name, indices, cat=cat)
     raise RuntimeError("Unsupported PuLP version for variable dictionary creation.")
@@ -42,8 +43,9 @@ class IntegratedOptimizationPipeline:
     演示流程：运筹学静态求解(MILP) -> 离散事件仿真(DES) -> 示例经济指标评价。
     参数由 config.json 提供；DES 与经济指标均为简化模型，尚未现场校准或验证。
     """
+
     def __init__(self, config_path):
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             self.config = json.load(f)
         self.optimal_stations = {}
         self.simulation_results = []
@@ -52,15 +54,15 @@ class IntegratedOptimizationPipeline:
     def run_albp_milp(self):
         """阶段1：混合整数线性规划求解"""
         print("\n[Phase 1] 运行 MILP 装配线平衡优化...")
-        tasks = list(self.config['tasks'].keys())
-        proc_times = self.config['tasks']
-        cycle_time = self.config['target_cycle_time']
-        precedence = self.config['precedence']
-        
+        tasks = list(self.config["tasks"].keys())
+        proc_times = self.config["tasks"]
+        cycle_time = self.config["target_cycle_time"]
+        precedence = self.config["precedence"]
+
         max_stations = len(tasks)
         prob = pulp.LpProblem("ALBP", pulp.LpMinimize)
-        x = _make_var_dict(prob, "x", (tasks, range(1, max_stations + 1)), cat='Binary')
-        y = _make_var_dict(prob, "y", range(1, max_stations + 1), cat='Binary')
+        x = _make_var_dict(prob, "x", (tasks, range(1, max_stations + 1)), cat="Binary")
+        y = _make_var_dict(prob, "y", range(1, max_stations + 1), cat="Binary")
 
         prob += pulp.lpSum([y[j] for j in range(1, max_stations + 1)])
 
@@ -68,27 +70,35 @@ class IntegratedOptimizationPipeline:
             prob += pulp.lpSum([x[i, j] for j in range(1, max_stations + 1)]) == 1
 
         for j in range(1, max_stations + 1):
-            prob += pulp.lpSum([proc_times[i] * x[i, j] for i in tasks]) <= cycle_time * y[j]
+            prob += (
+                pulp.lpSum([proc_times[i] * x[i, j] for i in tasks])
+                <= cycle_time * y[j]
+            )
 
-        for (u, v) in precedence:
-            prob += pulp.lpSum([j * x[u, j] for j in range(1, max_stations + 1)]) <= \
-                    pulp.lpSum([j * x[v, j] for j in range(1, max_stations + 1)])
-        
+        for u, v in precedence:
+            prob += pulp.lpSum(
+                [j * x[u, j] for j in range(1, max_stations + 1)]
+            ) <= pulp.lpSum([j * x[v, j] for j in range(1, max_stations + 1)])
+
         prob.solve(_cbc_solver(msg=0))
-        
-        if pulp.LpStatus[prob.status] == 'Optimal':
+
+        if pulp.LpStatus[prob.status] == "Optimal":
             self.num_stations = int(pulp.value(prob.objective))
             total_task_time = sum(proc_times.values())
-            
+
             for j in range(1, max_stations + 1):
                 if pulp.value(y[j]) == 1.0:
-                    self.optimal_stations[f"Station_{j}"] = [i for i in tasks if pulp.value(x[i, j]) == 1.0]
+                    self.optimal_stations[f"Station_{j}"] = [
+                        i for i in tasks if pulp.value(x[i, j]) == 1.0
+                    ]
             print(f"✅ 寻优成功！理论最小工站数: {self.num_stations}")
-            
+
             for st, tks in self.optimal_stations.items():
                 load = sum(proc_times[t] for t in tks)
-                print(f"   {st}: 包含任务 {tks}, 负荷 {load:.2f}s (平衡损失率: {(cycle_time-load)/cycle_time*100:.1f}%)")
-            
+                print(
+                    f"   {st}: 包含任务 {tks}, 负荷 {load:.2f}s (平衡损失率: {(cycle_time-load)/cycle_time*100:.1f}%)"
+                )
+
             lbr = (total_task_time / (self.num_stations * cycle_time)) * 100
             print(f"   --> 系统整体线平衡率 (LBR): {lbr:.2f}%")
         else:
@@ -97,63 +107,68 @@ class IntegratedOptimizationPipeline:
     def run_des_simulation(self):
         """阶段2：依据 MILP 结果动态生成并运行仿真"""
         print("\n[Phase 2] 依据寻优结果运行参数化离散事件仿真...")
-        
+
         def get_time(mu):
-            cv = self.config['simulation']['stochastic_cv']
+            cv = self.config["simulation"]["stochastic_cv"]
             return max(mu * 0.5, np.random.normal(mu, mu * cv))
 
         def sim_process(env, stations, results_dict):
             resources = {st: simpy.Resource(env, capacity=1) for st in stations}
             wip = 0
-            
+
             def process_item():
                 nonlocal wip
                 wip += 1
                 for st, tasks in stations.items():
                     with resources[st].request() as req:
                         yield req
-                        st_time = sum(self.config['tasks'][t] for t in tasks)
+                        st_time = sum(self.config["tasks"][t] for t in tasks)
                         yield env.timeout(get_time(st_time))
                 wip -= 1
-                results_dict['throughput'] += 1
+                results_dict["throughput"] += 1
 
             def spawner():
                 while True:
-                    ia_time = self.config['target_cycle_time']
+                    ia_time = self.config["target_cycle_time"]
                     yield env.timeout(get_time(ia_time))
                     env.process(process_item())
-            
+
             def monitor():
                 while True:
-                    results_dict['wip_log'].append(wip)
+                    results_dict["wip_log"].append(wip)
                     yield env.timeout(60)
 
             env.process(spawner())
             env.process(monitor())
-        
-        replications = self.config['simulation']['replications']
+
+        replications = self.config["simulation"]["replications"]
         for _ in range(replications):
             env = simpy.Environment()
-            run_data = {'throughput': 0, 'wip_log': []}
+            run_data = {"throughput": 0, "wip_log": []}
             sim_process(env, self.optimal_stations, run_data)
-            env.run(until=self.config['simulation']['shift_time_seconds'])
-            self.simulation_results.append({
-                'throughput': run_data['throughput'],
-                'avg_wip': np.mean(run_data['wip_log'])
-            })
+            env.run(until=self.config["simulation"]["shift_time_seconds"])
+            self.simulation_results.append(
+                {
+                    "throughput": run_data["throughput"],
+                    "avg_wip": np.mean(run_data["wip_log"]),
+                }
+            )
         print(f"✅ {replications}次蒙特卡洛仿真完成！")
 
     def evaluate_financials(self):
         """阶段3：经济效益评价 (Financial & Cost Analysis)"""
         print("\n[Phase 3] 简化经济情景指标（非投资回报评价）...")
-        avg_tp = np.mean([r['throughput'] for r in self.simulation_results])
-        avg_wip = np.mean([r['avg_wip'] for r in self.simulation_results])
-        
-        labor_cost = self.num_stations * self.config['financials']['labor_cost_per_station_per_shift']
-        wip_cost = avg_wip * self.config['financials']['wip_holding_cost_per_unit']
-        revenue = avg_tp * self.config['financials']['revenue_per_unit']
+        avg_tp = np.mean([r["throughput"] for r in self.simulation_results])
+        avg_wip = np.mean([r["avg_wip"] for r in self.simulation_results])
+
+        labor_cost = (
+            self.num_stations
+            * self.config["financials"]["labor_cost_per_station_per_shift"]
+        )
+        wip_cost = avg_wip * self.config["financials"]["wip_holding_cost_per_unit"]
+        revenue = avg_tp * self.config["financials"]["revenue_per_unit"]
         net_profit = revenue - labor_cost - wip_cost
-        
+
         print("-" * 50)
         print(f"指标 (平均值)\t\t| 金额 / 数量")
         print("-" * 50)
@@ -167,8 +182,10 @@ class IntegratedOptimizationPipeline:
         print(f"简化班次差额估算（非 ROI）\t| ¥ {net_profit:.2f}")
         print("=" * 50)
 
+
 if __name__ == "__main__":
     import os
+
     project_dir = os.path.dirname(os.path.abspath(__file__))
     pipeline = IntegratedOptimizationPipeline(os.path.join(project_dir, "config.json"))
     pipeline.run_albp_milp()
