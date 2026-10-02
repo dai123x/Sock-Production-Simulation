@@ -24,3 +24,9 @@ ENV/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Solver temporary files
+*.mps
+*.sol
+*.lp
+
