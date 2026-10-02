@@ -2,6 +2,23 @@
 
 本项目以 Python 的离散事件仿真库 `SimPy` 演示五工序生产线的参数化情景比较。没有提供可核验的现场测时或生产记录，模型输出不是企业实绩，也不是经过校准的数字孪生。
 
+### 📊 核心架构与仿真逻辑
+
+```mermaid
+graph TD
+    A[配置输入 config.json] --> B{核心引擎}
+    B -->|装配线平衡求解| C(ALBP MILP Solver<br/>静态优化)
+    B -->|离散事件仿真| D(SimPy DES Engine<br/>动态随机验证)
+    C --> D
+    D --> E[单次仿真 main_simulation.py]
+    D --> F[蒙特卡洛扩展 phd_level_simulation.py]
+    C --> G[一体化评估 integrated_pipeline.py]
+    D --> G
+    E --> H((效能对比图表与数据结论))
+    F --> H
+    G --> H
+```
+
 ## 目录结构
 - `main_simulation.py`: 核心仿真代码，包含了流水线类 `HosieryLine` 以及改善前后的环境配置。
 - `phd_level_simulation.py`: 多次随机情景仿真，输出逐次数据 `phd_simulation_replications.csv` 与摘要图 `phd_analysis_dashboard.png`。
