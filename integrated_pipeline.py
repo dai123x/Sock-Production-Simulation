@@ -170,7 +170,7 @@ class IntegratedOptimizationPipeline:
         net_profit = revenue - labor_cost - wip_cost
 
         print("-" * 50)
-        print(f"指标 (平均值)\t\t| 金额 / 数量")
+        print("指标 (平均值)\t\t| 金额 / 数量")
         print("-" * 50)
         print(f"最优所需人工工站数\t| {self.num_stations} 个")
         print(f"动态仿真班次产能\t| {avg_tp:.0f} 双")
@@ -184,7 +184,20 @@ class IntegratedOptimizationPipeline:
 
 
 if __name__ == "__main__":
-    import os
+    import argparse
+
+    parser = argparse.ArgumentParser(description="袜子生产线 ALBP + 离散事件仿真整合流水线")
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="随机种子（可选）。提供后离散事件仿真结果可复现；缺省保持随机。",
+    )
+    args = parser.parse_args()
+
+    if args.seed is not None:
+        np.random.seed(args.seed)
+        print(f"[Seed] 已固定随机种子: {args.seed}")
 
     project_dir = os.path.dirname(os.path.abspath(__file__))
     pipeline = IntegratedOptimizationPipeline(os.path.join(project_dir, "config.json"))
