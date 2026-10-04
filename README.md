@@ -66,3 +66,13 @@ graph TD
   ```bash
   python albp_milp_solver.py
   ```
+
+### 可复现性说明（integrated_pipeline.py）
+- 全部输入由项目根目录的 `config.json` 驱动：任务工时、目标节拍、`simulation.stochastic_cv` 波动系数与财务单价等；MILP 阶段本身是确定性的。
+- 阶段 2 离散事件仿真的服务时间来自下限裁切的正态抽样（`np.random.normal`），**默认不固定种子**，产能、平均在制品等指标逐次运行存在波动。
+- 需要可复现结果时请固定种子：
+  ```bash
+  python integrated_pipeline.py --seed 42
+  ```
+  同一种子重复运行将得到完全一致的输出（已在本地验证：两次 `--seed 42` 运行的班次产能与平均在制品完全相同）。
+- 仓库中已保存的结果图表与数据对应各自当次运行的输出；重跑时请以当次输出为准。
