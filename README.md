@@ -23,7 +23,7 @@ graph TD
 - `main_simulation.py`: 核心仿真代码，包含了流水线类 `HosieryLine` 以及改善前后的环境配置。
 - `phd_level_simulation.py`: 多次随机情景仿真，输出逐次数据 `phd_simulation_replications.csv` 与摘要图 `phd_analysis_dashboard.png`。
 - `albp_milp_solver.py`: 装配线平衡问题（ALBP）的混合整数线性规划（MILP）求解器。
-- `integrated_pipeline.py`: 一体化示例——MILP 静态求解 → DES 随机情景仿真 → 简化成本评价，读取 `config.json`。当前模型未实现工位并行工序时长叠加、固定随机种子或逐次结果导出，经济指标依赖示例假设，不应当作经验证的投资收益结论。
+- `integrated_pipeline.py`: 一体化示例——MILP 静态求解 → DES 随机情景仿真 → 简化成本评价，读取 `config.json`。当前仿真按 MILP 分配，将同一工位上的任务时长相加；默认不固定随机种子，可通过 `--seed` 指定。当前未逐次导出一体化仿真结果，经济指标依赖示例假设，不应当作经验证的投资收益结论。
 - `config.json`: 工序、目标工位周期时间、先后约束、仿真规模与财务参数。
 - `requirements.txt`: 运行仿真所需的 Python 依赖库。
 - `simulation_comparison.png` / `phd_analysis_dashboard.png`: 运行仿真后自动生成的效能对比图表。
